@@ -1,0 +1,898 @@
+<h1 id="sec:intro">Introduction</h1>
+<p>Financial returns are close to unpredictable in sign but strongly
+predictable in magnitude: large moves cluster, small moves cluster, and
+the squared returns carry persistent autocorrelation that the raw
+returns do not <span class="citation"
+data-cites="mandelbrot1963variation">[8]</span>. The GARCH(1,1) model of
+<span class="citation" data-cites="bollerslev1986garch">[2]</span>,
+generalizing the ARCH model of <span class="citation"
+data-cites="engle1982arch">[4]</span>, captures this with three
+parameters, and has become the default conditional-variance model in
+risk management. In cryptocurrency markets the fit is if anything
+sharper, and typically lands in the near-IGARCH regime with estimated
+persistence close to one <span class="citation"
+data-cites="katsiampa2017volatility chu2017garch">[3, 7]</span>.</p>
+<p>The standard evidence that GARCH “forecasts volatility well” <span
+class="citation"
+data-cites="andersenbollerslev1998answering hansenlunde2005garch">[1,
+5]</span> is collected on real data, where the object being forecast —
+the conditional variance <span class="math inline">\sigma_t^2</span> —
+is latent and never observed. Two questions are therefore hard to answer
+cleanly on real markets. When exactly does the model beat a naive
+volatility estimate, and by how much? And can we even trust a forecast
+comparison when the target is unobservable and must be replaced by a
+noisy proxy such as the squared return? This paper answers both under
+controlled conditions, by generating the data from a known GARCH(1,1) so
+that the true conditional-variance path is available as ground
+truth.</p>
+<p>We make no claim about real crypto. On the contrary: because our DGP
+<em>is</em> GARCH, the correctly specified model is guaranteed to win
+the forecast contest, and reporting that it wins would be circular. The
+contribution is the calibration around that fact — the size of the
+advantage and how it varies with persistence, the consistency of the
+estimator, the near-IGARCH fragility of every persistence-derived
+quantity, and, most usefully, a controlled confirmation of the <span
+class="citation" data-cites="patton2011volatility">[10]</span> result
+that the QLIKE and MSE losses rank forecasters identically whether they
+are scored against the true variance or against the noisy squared-return
+proxy. That last result is what licenses trusting a volatility-forecast
+evaluation on real data at all.</p>
+<p>Concretely, we run four experiments (Section <a href="#sec:design"
+data-reference-type="ref" data-reference="sec:design">3</a>) on the
+estimators and forecasters of Section <a href="#sec:methods"
+data-reference-type="ref" data-reference="sec:methods">2</a>:</p>
+<ol>
+<li><p><strong>Parameter recovery.</strong> Simulate a crypto-like
+GARCH(1,1) and refit by maximum likelihood over <span
+class="math inline">300</span> seeds at sample sizes <span
+class="math inline">T \in \{500, 1000, 2000, 5000\}</span>. Bias and
+RMSE shrink with <span class="math inline">T</span> and the persistence
+estimate converges to the true <span class="math inline">0.99</span>:
+MLE consistency, measured.</p></li>
+<li><p><strong>Forecast contest.</strong> Score one-step-ahead
+forecasters — the correctly specified GARCH refit, RiskMetrics EWMA
+(<span class="math inline">\lambda = 0.94</span>), and rolling-window
+sample variances — against the true conditional variance with MSE and
+QLIKE, across DGPs from near-IGARCH down to near-random. Quantify the
+GARCH advantage, its dependence on persistence, and the analytic
+multi-step mean-reversion of the forecast toward the long-run
+variance.</p></li>
+<li><p><strong>Persistence and half-life.</strong> Across a grid of true
+persistence (<span class="math inline">0.90</span> to <span
+class="math inline">0.995</span>), report the estimated persistence, the
+implied half-life <span class="math inline">\ln 0.5 /
+\ln(\alpha+\beta)</span>, and how estimation and long-horizon
+uncertainty blow up as persistence approaches one.</p></li>
+<li><p><strong>Proxy robustness.</strong> Re-score the contest against
+the squared-return proxy and confirm (Patton 2011) that the robust
+losses preserve the ranking, so the evaluation is trustworthy without
+observing true volatility.</p></li>
+</ol>
+<p>All results derive from one seeded run of one public harness
+(<code>scripts/run_all.py</code>); a companion script
+(<code>scripts/check_paper_numbers.py</code>) verifies every numeric
+claim in this manuscript against the run’s JSON output.</p>
+<h1 id="sec:methods">Model, estimator, and forecasters</h1>
+<h4 id="the-data-generating-process.">The data-generating process.</h4>
+<p>We simulate GARCH(1,1) with zero conditional mean and Gaussian
+innovations, <span class="math display">\begin{equation}
+\label{eq:garch}
+r_t = \sigma_t z_t, \quad z_t \sim \text{iid } \mathcal{N}(0,1), \qquad
+\sigma_t^2 = \omega + \alpha\, r_{t-1}^2 + \beta\, \sigma_{t-1}^2,
+\end{equation}</span> with <span class="math inline">\omega &gt;
+0</span>, <span class="math inline">\alpha,\beta \ge 0</span>, and <span
+class="math inline">\alpha + \beta &lt; 1</span>. Because we generate
+the path, the conditional variance <span
+class="math inline">\sigma_t^2</span> used to draw each <span
+class="math inline">r_t</span> is retained as ground truth. Taking
+unconditional expectations of Eq. <a href="#eq:garch"
+data-reference-type="eqref" data-reference="eq:garch">(garch)</a>
+gives the long-run variance, and iterating gives the persistence and
+half-life, <span class="math display">\begin{equation}
+\label{eq:props}
+\bar\sigma^{2}= \frac{\omega}{1-\alpha-\beta}, \qquad
+\text{persistence} = \alpha+\beta, \qquad
+h_{1/2} = \frac{\ln 0.5}{\ln(\alpha+\beta)},
+\end{equation}</span> the half-life being the number of observations for
+a variance shock to decay halfway back to <span
+class="math inline">\bar\sigma^{2}</span>. Our base “crypto-like” DGP
+fixes <span class="math inline">\omega = 0.04</span>, <span
+class="math inline">\alpha = 0.09</span>, <span
+class="math inline">\beta = 0.90</span>, so the persistence is <span
+class="math inline">0.99</span> (near-IGARCH), the long-run variance is
+<span class="math inline">4.0</span> (per-observation volatility <span
+class="math inline">2.0</span>), and the true half-life is <span
+class="math inline">69.0</span> observations (derived from Eq. <a
+href="#eq:props" data-reference-type="eqref"
+data-reference="eq:props">(props)</a>). A burn-in is discarded so
+each retained path starts from the stationary distribution.</p>
+<h4 id="estimation.">Estimation.</h4>
+<p>Parameters are estimated by Gaussian maximum likelihood. With <span
+class="math inline">r_t \mid \mathcal{F}_{t-1} \sim \mathcal{N}(0,
+\sigma_t^2(\theta))</span> the log-likelihood is a sum of one-step
+densities, <span class="math inline">\ell(\theta) = -\tfrac12 \sum_t
+[\ln 2\pi + \ln\sigma_t^2(\theta) + r_t^2 /
+\sigma_t^2(\theta)]</span>, maximized numerically by the
+<code>arch</code> library of <span class="citation"
+data-cites="sheppard2023arch">[11]</span>. The DGP is scaled so returns
+are <span class="math inline">O(1)</span>, so the <span
+class="math inline">\times 100</span> rescaling that daily returns
+usually require is unnecessary and is switched off.</p>
+<h4 id="forecasters.">Forecasters.</h4>
+<p>Each forecaster produces a causal one-step-ahead variance <span
+class="math inline">h_t = \widehat{\mathrm{Var}}(r_t \mid
+\mathcal{F}_{t-1})</span>:</p>
+<ul>
+<li><p><em>GARCH</em> (correctly specified): fit on a training block,
+then filter <span class="math inline">h_t = \hat\omega + \hat\alpha\,
+r_{t-1}^2 + \hat\beta\, h_{t-1}</span> over the test block. With the
+true parameters this reproduces <span
+class="math inline">\sigma_t^2</span> exactly after the seed transient;
+with estimated parameters it carries only estimation error.</p></li>
+<li><p><em>EWMA / RiskMetrics</em> <span class="citation"
+data-cites="riskmetrics1996">[6]</span>, <span
+class="math inline">\lambda = 0.94</span>: <span class="math inline">h_t
+= (1-\lambda) r_{t-1}^2 + \lambda\, h_{t-1}</span>. This is the
+constrained GARCH special case <span class="math inline">\omega =
+0</span>, <span class="math inline">\alpha = 1-\lambda</span>, <span
+class="math inline">\beta = \lambda</span>, with persistence exactly
+one.</p></li>
+<li><p><em>Rolling window</em>, <span class="math inline">w \in \{22,
+66, 132\}</span> observations (about one, three, and six trading
+months): <span class="math inline">h_t = \text{mean}(r_{t-w}^2, \dots,
+  r_{t-1}^2)</span>.</p></li>
+</ul>
+<h4 id="multi-step-forecast.">Multi-step forecast.</h4>
+<p>Iterating Eq. <a href="#eq:garch" data-reference-type="eqref"
+data-reference="eq:garch">(garch)</a> in conditional expectation,
+using <span class="math inline">\mathbb{E}_T[r_{T+k}^2] =
+\mathbb{E}_T[\sigma_{T+k}^2]</span>, gives the analytic term structure
+<span class="math display">\begin{equation}
+\label{eq:multistep}
+\mathbb{E}_T[\sigma_{T+h}^2] = \bar\sigma^{2}+
+(\alpha+\beta)^{\,h-1}\bigl(\sigma_{T+1}^2 - \bar\sigma^{2}\bigr),
+\end{equation}</span> the forecast decaying geometrically from today’s
+one-step variance toward the long-run level at rate <span
+class="math inline">(\alpha+\beta)^{\,h-1}</span>.</p>
+<h4 id="losses.">Losses.</h4>
+<p>A forecast <span class="math inline">h</span> is scored against a
+target <span class="math inline">X</span> by <span class="citation"
+data-cites="patton2011volatility">[10]</span> <span
+class="math display">\begin{equation}
+\label{eq:losses}
+\mathrm{MSE}(X,h) = \mathbb{E}[(X-h)^2], \quad
+\mathrm{QLIKE}(X,h) = \mathbb{E}\!\left[\frac{X}{h} - \ln\frac{X}{h} -
+1\right], \quad
+\mathrm{MAE}(X,h) = \mathbb{E}[|X-h|].
+\end{equation}</span> QLIKE is the Bregman divergence generated by <span
+class="math inline">-\ln</span>: non-negative, uniquely minimized at
+<span class="math inline">h = X</span>, and dependent only on the ratio
+<span class="math inline">X/h</span> (scale free). The target <span
+class="math inline">X</span> is the true conditional variance <span
+class="math inline">\sigma_t^2</span> in Experiments 2–3 and the
+squared-return proxy <span class="math inline">r_t^2</span> in
+Experiment 4. MSE and QLIKE are the Patton-robust losses (ranking
+invariant to a conditionally unbiased proxy); MAE, which targets the
+conditional median, is not and is carried as a contrast.</p>
+<h1 id="sec:design">Experimental design</h1>
+<p>All experiments are generated and analyzed by a single seeded Python
+harness (<code>scripts/run_all.py</code>, methods in
+<code>scripts/garch.py</code>) under Python 3.14.6 with NumPy 2.5.1 and
+<code>arch</code> 8.0.0, so every number is bit-reproducible by one
+command. <em>Parameter recovery</em> refits the base DGP over <span
+class="math inline">M = 300</span> seeds at each <span
+class="math inline">T \in \{500, 1000, 2000, 5000\}</span>, reporting
+the bias, RMSE, and standard deviation of each estimate. <em>Forecast
+contest</em> simulates <span class="math inline">M = 200</span> paths of
+length <span class="math inline">3000</span> per DGP, fits GARCH on the
+first <span class="math inline">2000</span> observations, and scores all
+forecasters on the final <span class="math inline">1000</span> (so
+GARCH’s parameters never see the test block); it sweeps DGPs of
+persistence <span class="math inline">\{0.99, 0.90, 0.70, 0.40, 0.20,
+0.05\}</span>, holding the long-run variance fixed at <span
+class="math inline">4.0</span> and <span
+class="math inline">\alpha</span>’s share of persistence fixed at the
+base ratio. The multi-step sub-experiment forecasts <span
+class="math inline">h \in \{1, 5, 10, 22\}</span> steps ahead from every
+test origin on the crypto-like DGP over <span class="math inline">M =
+120</span> paths. <em>Persistence and half-life</em> refits over <span
+class="math inline">M = 300</span> seeds of length <span
+class="math inline">3000</span> across true persistence <span
+class="math inline">\{0.90, 0.95, 0.97, 0.98, 0.99, 0.995\}</span>.
+<em>Proxy robustness</em> re-scores the contest against <span
+class="math inline">r_t^2</span> and compares forecaster orderings under
+the two targets.</p>
+<h1 id="sec:results">Results</h1>
+<h2 id="sec:res-recovery">Parameter recovery: MLE is consistent</h2>
+<p>Table <a href="#tab:recovery" data-reference-type="ref"
+data-reference="tab:recovery">1</a> reports the estimation error on the
+crypto-like DGP. Every parameter is recovered with a bias and RMSE that
+shrink steadily with the sample size, at roughly the <span
+class="math inline">1/\sqrt{T}</span> rate a consistent estimator should
+show: the persistence RMSE falls from <span
+class="math inline">0.028</span> at <span class="math inline">T =
+500</span> to <span class="math inline">0.004</span> at <span
+class="math inline">T = 5000</span>, and the persistence estimate itself
+climbs from <span class="math inline">0.977</span> toward the true <span
+class="math inline">0.99</span> (reaching <span
+class="math inline">0.989</span>), with a small negative small-sample
+bias (<span class="math inline">-0.013</span> at <span
+class="math inline">T = 500</span>) that is the well-known downward bias
+of the persistence estimate near the unit root. The reaction and memory
+parameters land on their targets (<span class="math inline">\hat\alpha
+\to 0.089</span>, <span class="math inline">\hat\beta \to 0.900</span>
+at <span class="math inline">T = 5000</span>), and the intercept <span
+class="math inline">\omega</span>, which is the hardest to pin down in
+the near-IGARCH regime, carries the largest relative error (RMSE <span
+class="math inline">0.078 \to 0.011</span>, a persistent small upward
+bias <span class="math inline">0.036 \to 0.003</span>). The implied
+half-life, a strongly nonlinear function of the estimates, is
+correspondingly slow to converge: its median climbs from <span
+class="math inline">41.3</span> toward the true <span
+class="math inline">69.0</span>, reaching only <span
+class="math inline">63.0</span> at <span class="math inline">T =
+5000</span> — a first sign of the near-IGARCH fragility that Section <a
+href="#sec:res-persist" data-reference-type="ref"
+data-reference="sec:res-persist">4.3</a> quantifies.</p>
+<div id="tab:recovery">
+<table>
+<caption>Experiment 1 (parameter recovery): bias and root-mean-square
+error of the Gaussian-MLE estimates on the crypto-like DGP (<span
+class="math inline">\omega = 0.04</span>, <span
+class="math inline">\alpha = 0.09</span>, <span
+class="math inline">\beta = 0.90</span>, persistence <span
+class="math inline">0.99</span>, true half-life <span
+class="math inline">69.0</span> observations), over <span
+class="math inline">M = 300</span> seeds at each sample size. Errors
+fall with <span class="math inline">T</span>; the persistence estimate
+converges to <span class="math inline">0.99</span>.</caption>
+<thead>
+<tr>
+<th style="text-align: right;"><span class="math inline">T</span></th>
+<th style="text-align: right;"><span
+class="math inline">\widehat{\text{pers.}}</span></th>
+<th style="text-align: right;">pers. RMSE</th>
+<th style="text-align: right;"><span class="math inline">\alpha</span>
+RMSE</th>
+<th style="text-align: right;"><span class="math inline">\beta</span>
+RMSE</th>
+<th style="text-align: right;"><span class="math inline">\omega</span>
+RMSE</th>
+<th style="text-align: right;">median <span
+class="math inline">h_{1/2}</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">500</td>
+<td style="text-align: right;">0.977</td>
+<td style="text-align: right;">0.028</td>
+<td style="text-align: right;">0.031</td>
+<td style="text-align: right;">0.040</td>
+<td style="text-align: right;">0.078</td>
+<td style="text-align: right;">41.3</td>
+</tr>
+<tr>
+<td style="text-align: right;">1000</td>
+<td style="text-align: right;">0.984</td>
+<td style="text-align: right;">0.013</td>
+<td style="text-align: right;">0.018</td>
+<td style="text-align: right;">0.022</td>
+<td style="text-align: right;">0.031</td>
+<td style="text-align: right;">50.7</td>
+</tr>
+<tr>
+<td style="text-align: right;">2000</td>
+<td style="text-align: right;">0.987</td>
+<td style="text-align: right;">0.0072</td>
+<td style="text-align: right;">0.014</td>
+<td style="text-align: right;">0.014</td>
+<td style="text-align: right;">0.017</td>
+<td style="text-align: right;">56.8</td>
+</tr>
+<tr>
+<td style="text-align: right;">5000</td>
+<td style="text-align: right;">0.989</td>
+<td style="text-align: right;">0.0044</td>
+<td style="text-align: right;">0.0083</td>
+<td style="text-align: right;">0.0092</td>
+<td style="text-align: right;">0.011</td>
+<td style="text-align: right;">63.0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="sec:res-contest">Forecast contest: GARCH wins, and by how
+much</h2>
+<p>Table <a href="#tab:contest" data-reference-type="ref"
+data-reference="tab:contest">2</a> scores the one-step-ahead forecasters
+against the true conditional variance. The correctly specified GARCH
+minimizes both QLIKE and MSE at every DGP — as it must, since it is the
+DGP — but the interesting content is the margin and its shape. On the
+crypto-like DGP (persistence <span class="math inline">0.99</span>)
+GARCH’s QLIKE is <span class="math inline">0.0018</span> against <span
+class="math inline">0.0119</span> for the best naive competitor, an
+<span class="math inline">85.0\%</span> reduction; on MSE the gap is far
+starker (<span class="math inline">0.219</span> versus <span
+class="math inline">1.13</span> for EWMA), because MSE on the variance
+level is dominated by the rare large-variance spikes that only a
+conditional model tracks.</p>
+<p>The margin is not monotone in persistence, and the reason is
+instructive. It peaks at moderate persistence — <span
+class="math inline">92.8\%</span> at persistence <span
+class="math inline">0.90</span>, where the best naive QLIKE is worst at
+<span class="math inline">0.0222</span> — and falls off in both
+directions. Toward the near-random end the absolute advantage collapses
+because there is little volatility dynamics left to model: the
+best-naive QLIKE falls monotonically from <span
+class="math inline">0.0222</span> at persistence <span
+class="math inline">0.90</span> to <span
+class="math inline">0.0079</span> at persistence <span
+class="math inline">0.05</span>, and GARCH’s edge over it shrinks with
+it (absolute QLIKE gap <span class="math inline">0.0206
+\to 0.0065</span>). Toward the near-IGARCH end the gap also narrows, to
+<span class="math inline">85.0\%</span> at persistence <span
+class="math inline">0.99</span>, but for the opposite reason: there the
+best naive is the RiskMetrics EWMA, and near a unit root EWMA — a
+persistence-one GARCH — is a good approximation, so it trails GARCH
+closely rather than badly. Below persistence <span
+class="math inline">0.70</span> the best naive is instead the longest
+rolling window, a near-constant-variance estimate that suits a
+nearly-static DGP.</p>
+<div id="tab:contest">
+<table>
+<caption>Experiment 2 (forecast contest): one-step-ahead forecast losses
+against the TRUE conditional variance, averaged over <span
+class="math inline">M = 200</span> paths, by DGP persistence (long-run
+variance held at <span class="math inline">4.0</span>). “Best naive” is
+the lowest-QLIKE non-GARCH forecaster and its QLIKE; the gap is the
+percentage QLIKE reduction of GARCH over it. GARCH also minimizes MSE at
+every row.</caption>
+<thead>
+<tr>
+<th style="text-align: right;">Persistence</th>
+<th style="text-align: right;">GARCH QLIKE</th>
+<th style="text-align: left;">Best naive</th>
+<th style="text-align: left;">Best-naive QLIKE</th>
+<th style="text-align: right;">QLIKE gap</th>
+<th style="text-align: right;">GARCH MSE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0.99</td>
+<td style="text-align: right;">0.0018</td>
+<td style="text-align: left;">EWMA</td>
+<td style="text-align: left;">0.0119</td>
+<td style="text-align: right;">85.0%</td>
+<td style="text-align: right;">0.219</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.90</td>
+<td style="text-align: right;">0.0016</td>
+<td style="text-align: left;">EWMA</td>
+<td style="text-align: left;">0.0222</td>
+<td style="text-align: right;">92.8%</td>
+<td style="text-align: right;">0.070</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: right;">0.0016</td>
+<td style="text-align: left;">rolling (132)</td>
+<td style="text-align: left;">0.0148</td>
+<td style="text-align: right;">89.2%</td>
+<td style="text-align: right;">0.060</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: right;">0.0012</td>
+<td style="text-align: left;">rolling (132)</td>
+<td style="text-align: left;">0.0093</td>
+<td style="text-align: right;">87.1%</td>
+<td style="text-align: right;">0.043</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.20</td>
+<td style="text-align: right;">0.0011</td>
+<td style="text-align: left;">rolling (132)</td>
+<td style="text-align: left;">0.0085</td>
+<td style="text-align: right;">87.3%</td>
+<td style="text-align: right;">0.037</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.05</td>
+<td style="text-align: right;">0.0013</td>
+<td style="text-align: left;">rolling (132)</td>
+<td style="text-align: left;">0.0079</td>
+<td style="text-align: right;">82.9%</td>
+<td style="text-align: right;">0.042</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h4 id="multi-step-forecasts-mean-revert.">Multi-step forecasts
+mean-revert.</h4>
+<p>Table <a href="#tab:multistep" data-reference-type="ref"
+data-reference="tab:multistep">3</a> reports the analytic multi-step
+forecast of Eq. <a href="#eq:multistep" data-reference-type="eqref"
+data-reference="eq:multistep">(multistep)</a> on the crypto-like DGP.
+The forecast error against the realized true variance grows with the
+horizon, from an MSE of <span class="math inline">0.58</span> at <span
+class="math inline">h = 1</span> to <span
+class="math inline">12.65</span> at <span class="math inline">h =
+22</span>, as the intervening shocks accumulate. Meanwhile the forecast
+decays toward the long-run variance <span class="math inline">4.0</span>
+at the predicted geometric rate <span
+class="math inline">(\alpha+\beta)^{\,h-1}</span>: with persistence
+<span class="math inline">0.99</span> that factor is <span
+class="math inline">0.961</span> at <span class="math inline">h =
+5</span>, <span class="math inline">0.914</span> at <span
+class="math inline">h = 10</span>, and <span
+class="math inline">0.810</span> at <span class="math inline">h =
+22</span>, and the empirical mean deviation of the forecast from <span
+class="math inline">\bar\sigma^{2}</span> tracks it closely (falling to
+<span class="math inline">0.767</span> of its one-step value by <span
+class="math inline">h = 22</span>). This is the near-IGARCH signature:
+even three weeks out, the forecast has reverted less than a fifth of the
+way to its long-run level, so a short-horizon crypto GARCH forecast is
+essentially “today’s variance, very slowly fading.”</p>
+<div id="tab:multistep">
+<table>
+<caption>Multi-step forecast on the crypto-like DGP (<span
+class="math inline">M = 120</span> paths). MSE is against the realized
+true variance <span class="math inline">h</span> steps ahead; the
+analytic decay is <span
+class="math inline">(\alpha+\beta)^{\,h-1}</span> with persistence <span
+class="math inline">0.99</span>; the deviation ratio is the mean <span
+class="math inline">|\text{forecast} - \bar\sigma^{2}|</span> relative
+to its one-step value, confirming the geometric mean-reversion toward
+the long-run variance <span class="math inline">4.0</span>.</caption>
+<thead>
+<tr>
+<th style="text-align: right;">Horizon <span
+class="math inline">h</span></th>
+<th style="text-align: right;">Forecast MSE</th>
+<th style="text-align: right;">Analytic decay <span
+class="math inline">(\alpha+\beta)^{h-1}</span></th>
+<th style="text-align: right;">Deviation ratio</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0.58</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">1.000</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">3.22</td>
+<td style="text-align: right;">0.961</td>
+<td style="text-align: right;">0.947</td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td style="text-align: right;">6.40</td>
+<td style="text-align: right;">0.914</td>
+<td style="text-align: right;">0.887</td>
+</tr>
+<tr>
+<td style="text-align: right;">22</td>
+<td style="text-align: right;">12.65</td>
+<td style="text-align: right;">0.810</td>
+<td style="text-align: right;">0.767</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="sec:res-persist">Persistence and half-life: the near-IGARCH
+fragility</h2>
+<p>Table <a href="#tab:persist" data-reference-type="ref"
+data-reference="tab:persist">4</a> sweeps the true persistence and
+exposes the crypto practitioner’s central hazard. The persistence
+<em>itself</em> is estimated tightly, and in fact more tightly as it
+approaches one: its RMSE falls from <span
+class="math inline">0.032</span> at persistence <span
+class="math inline">0.90</span> to <span
+class="math inline">0.005</span> at <span
+class="math inline">0.995</span>, because a near-unit-root process pins
+the estimate against the stationarity boundary. But every quantity
+<em>derived</em> from persistence through the <span
+class="math inline">1/(1-(\alpha+\beta))</span> factor becomes
+treacherous. The volatility half-life <span class="math inline">\ln 0.5
+/ \ln(\alpha+\beta)</span> runs from <span
+class="math inline">6.6</span> observations at persistence <span
+class="math inline">0.90</span> to <span
+class="math inline">138.3</span> at <span
+class="math inline">0.995</span>, and its estimate is both downward
+biased (median <span class="math inline">105.5</span> against the true
+<span class="math inline">138.3</span> at persistence <span
+class="math inline">0.995</span>) and wildly dispersed: the
+interquartile range of the estimated half-life explodes from <span
+class="math inline">2.6</span> observations at persistence <span
+class="math inline">0.90</span> to <span
+class="math inline">121.4</span> at <span
+class="math inline">0.995</span> — nearly as large as the quantity
+itself. The long-run variance, whose sensitivity to persistence is <span
+class="math inline">\bar\sigma^{2}/(1-(\alpha+\beta))</span> and thus
+grows from <span class="math inline">40</span> to <span
+class="math inline">800</span> across the grid, drifts increasingly
+below its true value of <span class="math inline">4.0</span> (median
+<span class="math inline">3.56</span> at persistence <span
+class="math inline">0.995</span>). The lesson matches the folk warning:
+in the near-IGARCH regime the point estimate of long-run volatility and
+half-life should never be trusted without an interval, even though the
+persistence that generates them looks precise.</p>
+<div id="tab:persist">
+<table>
+<caption>Experiment 3 (persistence and half-life): estimation across the
+true persistence grid (<span class="math inline">M = 300</span> seeds,
+<span class="math inline">T = 3000</span>, long-run variance <span
+class="math inline">4.0</span>). The persistence is estimated ever more
+tightly toward the unit root, but the implied half-life <span
+class="math inline">\ln 0.5/\ln(\alpha+\beta)</span> and long-run
+variance become severely dispersed and biased — the near-IGARCH
+fragility.</caption>
+<thead>
+<tr>
+<th style="text-align: right;">Persistence</th>
+<th style="text-align: right;"><span
+class="math inline">\widehat{\text{pers.}}</span></th>
+<th style="text-align: right;">pers. RMSE</th>
+<th style="text-align: right;">true <span
+class="math inline">h_{1/2}</span></th>
+<th style="text-align: right;">median <span class="math inline">\hat
+h_{1/2}</span></th>
+<th style="text-align: right;"><span class="math inline">\hat
+h_{1/2}</span> IQR</th>
+<th style="text-align: right;">median <span
+class="math inline">\widehat{\bar\sigma^{2}}</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">0.900</td>
+<td style="text-align: right;">0.896</td>
+<td style="text-align: right;">0.032</td>
+<td style="text-align: right;">6.6</td>
+<td style="text-align: right;">6.7</td>
+<td style="text-align: right;">2.6</td>
+<td style="text-align: right;">3.97</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.950</td>
+<td style="text-align: right;">0.947</td>
+<td style="text-align: right;">0.015</td>
+<td style="text-align: right;">13.5</td>
+<td style="text-align: right;">13.4</td>
+<td style="text-align: right;">5.1</td>
+<td style="text-align: right;">4.01</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.970</td>
+<td style="text-align: right;">0.968</td>
+<td style="text-align: right;">0.011</td>
+<td style="text-align: right;">22.8</td>
+<td style="text-align: right;">21.8</td>
+<td style="text-align: right;">10.1</td>
+<td style="text-align: right;">3.97</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.980</td>
+<td style="text-align: right;">0.978</td>
+<td style="text-align: right;">0.0080</td>
+<td style="text-align: right;">34.3</td>
+<td style="text-align: right;">32.4</td>
+<td style="text-align: right;">14.1</td>
+<td style="text-align: right;">3.90</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.990</td>
+<td style="text-align: right;">0.988</td>
+<td style="text-align: right;">0.0061</td>
+<td style="text-align: right;">69.0</td>
+<td style="text-align: right;">62.4</td>
+<td style="text-align: right;">34.9</td>
+<td style="text-align: right;">3.79</td>
+</tr>
+<tr>
+<td style="text-align: right;">0.995</td>
+<td style="text-align: right;">0.993</td>
+<td style="text-align: right;">0.0053</td>
+<td style="text-align: right;">138.3</td>
+<td style="text-align: right;">105.5</td>
+<td style="text-align: right;">121.4</td>
+<td style="text-align: right;">3.56</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="sec:res-proxy">Proxy robustness: the evaluation survives an
+unobservable target</h2>
+<p>Real volatility is never observed, so any forecast comparison on live
+data must score against a proxy. The squared return <span
+class="math inline">r_t^2</span> is a conditionally unbiased but
+extremely noisy one — <span class="math inline">r_t^2 = \sigma_t^2
+z_t^2</span> with <span class="math inline">\mathbb{E}[z_t^2 \mid
+\mathcal{F}_{t-1}] = 1</span> — and Experiment 4 asks whether it still
+ranks the forecasters correctly. Table <a href="#tab:proxy"
+data-reference-type="ref" data-reference="tab:proxy">5</a> re-scores the
+crypto-like contest against <span class="math inline">r_t^2</span>. The
+effect of the proxy is dramatic in level but not in order: it inflates
+every QLIKE by a nearly forecaster-independent constant of about <span
+class="math inline">1.267</span> (the mean of the proxy’s own noise
+entropy), moving GARCH from <span class="math inline">0.0018</span> to
+<span class="math inline">1.269</span> and EWMA from <span
+class="math inline">0.0119</span> to <span
+class="math inline">1.279</span>, so the gap between them barely changes
+(<span class="math inline">0.0101</span> against true variance, <span
+class="math inline">0.0108</span> against the proxy). The entire
+ordering is preserved, and GARCH remains the selected forecaster; across
+all six DGPs GARCH is chosen under the proxy exactly as under the true
+variance (<span class="math inline">6</span> of <span
+class="math inline">6</span>), for both robust losses.</p>
+<p>The robustness is a property of the loss, not luck. Repeating the
+comparison seed by seed on the noisy proxy — where finite-sample noise
+can flip the ordering of close competitors — the Patton-robust losses
+agree with the true-variance ordering on <span
+class="math inline">96.2\%</span> (QLIKE) and <span
+class="math inline">95.2\%</span> (MSE) of the <span
+class="math inline">12000</span> forecaster-pair comparisons, while the
+non-robust MAE agrees on only <span class="math inline">81.5\%</span>.
+The correctly specified model is dominant enough here that even MAE
+picks it as the overall winner, but MAE is measurably less reliable on
+the pairwise orderings, exactly as its lack of proxy-robustness
+predicts. The practical consequence is the one that makes
+volatility-forecast evaluation possible at all: scored with QLIKE or
+MSE, a forecast comparison run on observable squared returns reaches the
+same verdict it would reach against the latent variance nobody can
+see.</p>
+<div id="tab:proxy">
+<table>
+<caption>Experiment 4 (proxy robustness), crypto-like DGP:
+one-step-ahead QLIKE scored against the true conditional variance versus
+the squared-return proxy. The proxy adds a nearly forecaster-independent
+offset (<span class="math inline">\approx 1.267</span>) but preserves
+the ordering; GARCH stays first. Across all six DGPs GARCH is the
+QLIKE-selected forecaster under the proxy as under the truth.</caption>
+<thead>
+<tr>
+<th style="text-align: left;">Forecaster</th>
+<th style="text-align: right;">QLIKE vs. true variance</th>
+<th style="text-align: right;">QLIKE vs. <span
+class="math inline">r_t^2</span> proxy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">GARCH</td>
+<td style="text-align: right;">0.0018</td>
+<td style="text-align: right;">1.269</td>
+</tr>
+<tr>
+<td style="text-align: left;">EWMA</td>
+<td style="text-align: right;">0.0119</td>
+<td style="text-align: right;">1.279</td>
+</tr>
+<tr>
+<td style="text-align: left;">rolling (22)</td>
+<td style="text-align: right;">0.0290</td>
+<td style="text-align: right;">1.297</td>
+</tr>
+<tr>
+<td style="text-align: left;">rolling (66)</td>
+<td style="text-align: right;">0.0738</td>
+<td style="text-align: right;">1.342</td>
+</tr>
+<tr>
+<td style="text-align: left;">rolling (132)</td>
+<td style="text-align: right;">0.1365</td>
+<td style="text-align: right;">1.407</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h1 id="sec:discussion">Discussion</h1>
+<h4 id="what-garch-does-and-does-not-buy-you.">What GARCH does and does
+not buy you.</h4>
+<p>Under a GARCH DGP the correctly specified model wins the one-step
+contest at every persistence, but the margin over a good naive estimator
+is not uniform. It is largest where the volatility is genuinely dynamic
+yet the naive tools are misspecified (moderate persistence), and it
+shrinks at both extremes: toward a static DGP because there is little to
+forecast, and toward the near-IGARCH regime because there the
+RiskMetrics EWMA is itself nearly a GARCH and closes most of the gap.
+This is the honest calibration behind the workhorse status of
+GARCH(1,1): the model earns the most where the data have exploitable but
+non-trivial dynamics, and in the near-unit-root regime typical of crypto
+a well-tuned EWMA is a respectable one-parameter stand-in for one-step
+forecasting — consistent with the classic finding that little beats
+GARCH(1,1) but that the simplest conditional models already capture most
+of the forecastable variance <span class="citation"
+data-cites="hansenlunde2005garch andersenbollerslev1998answering">[1,
+5]</span>.</p>
+<h4 id="persistence-is-easy-everything-downstream-is-not.">Persistence
+is easy; everything downstream is not.</h4>
+<p>The near-IGARCH results sharpen a warning that is easy to state and
+easy to ignore. The persistence is the best-identified feature of a
+high-persistence GARCH fit, tightening as it approaches one. But the
+half-life and the long-run variance are <span
+class="math inline">1/(1-(\alpha+\beta))</span>-type functionals, and a
+persistence known to <span class="math inline">\pm 0.005</span> still
+leaves the half-life uncertain by tens of observations and the long-run
+variance uncertain by a large factor. Multi-step forecasts and any
+volatility-targeting rule that leans on the long-run level inherit that
+fragility; the safe move is to treat the near-IGARCH long-run variance
+as an interval, refit on rolling windows, and be alert that apparent
+near-integration can be an artifact of structural breaks rather than
+genuine persistence.</p>
+<h4 id="why-the-evaluation-can-be-trusted.">Why the evaluation can be
+trusted.</h4>
+<p>The most portable result is the proxy-robustness of Experiment 4. It
+is what allows the calibration in this paper — all of it obtained
+against a latent variance we happen to know because we simulated it — to
+transfer to real data, where the same QLIKE or MSE comparison can be run
+against observable squared returns and will rank forecasters the same
+way. Using a non-robust loss such as MAE forfeits this guarantee; our
+seed-by-seed comparison shows it degrading measurably even in a setting
+where the correct model is otherwise dominant.</p>
+<h1 id="sec:limitations">Limitations</h1>
+<ul>
+<li><p><strong>Synthetic GARCH DGP, favoring GARCH by
+construction.</strong> The DGP is a Gaussian GARCH(1,1), so the
+correctly specified model is guaranteed to win the forecast contest; we
+never claim GARCH beats naive forecasters on real crypto. The
+contribution is the calibration of the margin and its shape, the
+consistency and near-IGARCH fragility results, and the proxy-robustness
+demonstration — all of which require known ground truth and none of
+which is a market claim.</p></li>
+<li><p><strong>Gaussian innovations, symmetric variance.</strong> Real
+crypto returns have heavy tails and an asymmetric (leverage) response
+that plain Gaussian GARCH(1,1) does not model; those are deliberately
+out of scope here and are the subject of the companion work on
+Student-<span class="math inline">t</span>/skewed innovations and
+GJR/EGARCH <span class="citation"
+data-cites="nelson1991egarch">[9]</span>. Our experiments say nothing
+about model <em>misspecification</em>, only about behavior under correct
+specification.</p></li>
+<li><p><strong>One base parameterization per experiment.</strong> The
+forecast contest varies persistence but holds the long-run variance and
+the <span class="math inline">\alpha</span>-share fixed; the recovery
+and half-life grids fix the remaining parameters. We did not sweep the
+full parameter space, the innovation distribution, or the train/test
+split, so the quantitative margins are specific to these
+configurations.</p></li>
+<li><p><strong>One-step focus; forecasters are fixed-parameter.</strong>
+The contest is primarily one-step-ahead, and GARCH is fit once on the
+training block rather than refit at every step; a fully rolling refit
+and a broader multi-horizon loss study would sharpen the multi-step
+numbers.</p></li>
+<li><p><strong>Proxy robustness shown for one proxy.</strong> We use the
+squared return, the canonical conditionally-unbiased daily proxy;
+realized-variance proxies from intraday data are more precise and would
+compress the level offset of Experiment 4, though Patton’s
+ranking-robustness holds for any conditionally unbiased proxy.</p></li>
+</ul>
+<h1 id="sec:conclusion">Conclusion</h1>
+<p>We asked whether GARCH(1,1) actually forecasts volatility, and
+answered it where the answer can be checked: on a synthetic GARCH DGP
+with a known conditional-variance path. Maximum likelihood recovers the
+parameters consistently, the persistence estimate converging to the true
+<span class="math inline">0.99</span> as the RMSE falls like <span
+class="math inline">1/\sqrt{T}</span>. Scored against the true variance
+by the proxy-robust QLIKE, the correctly specified model beats the best
+naive forecaster by <span class="math inline">83</span>–<span
+class="math inline">93\%</span>, with the margin largest at moderate
+persistence and narrowing toward both the static and the near-IGARCH
+extremes — and near the unit root a RiskMetrics EWMA is its closest
+competitor because it is a persistence-one GARCH. The persistence is
+pinned down tightly even near integration, but the half-life and
+long-run variance derived from it become severely dispersed and biased,
+quantifying the near-IGARCH fragility that should make any crypto
+volatility-targeting rule cautious. Finally, re-scoring against the
+noisy squared-return proxy leaves the QLIKE and MSE rankings intact —
+the proxy shifts every loss by a near-constant and preserves the order —
+so the evaluation is trustworthy even though true volatility is never
+observed. GARCH’s victory here is built in; what is not built in, and
+what transfers, is the calibration of when it matters and the
+confirmation that we can measure it without seeing the target.</p>
+<h4 id="reproducibility.">Reproducibility.</h4>
+<p>All code, tests, and outputs accompany this paper:
+<code>scripts/run_all.py</code> regenerates
+<code>results/results.json</code> from fixed seeds (Python 3.14.6, NumPy
+2.5.1, <code>arch</code> 8.0.0);
+<code>scripts/check_paper_numbers.py</code> verifies every numeric claim
+in this manuscript against that file and fails on any mismatch;
+<code>tests/</code> contains deterministic invariant tests for the DGP,
+estimator, forecasters, and losses.</p>
+<h1 id="references">References</h1><div id="refs" class="references csl-bib-body" data-entry-spacing="1"
+role="list">
+<div id="ref-andersenbollerslev1998answering" class="csl-entry"
+role="listitem">
+<div class="csl-left-margin">[1] </div><div
+class="csl-right-inline">Torben G. Andersen and Tim Bollerslev.
+Answering the skeptics: Yes, standard volatility models do provide
+accurate forecasts. <em>International Economic Review</em>,
+39(4):885–905, 1998. doi: <a
+href="https://doi.org/10.2307/2527343">10.2307/2527343</a>.</div>
+</div>
+<div id="ref-bollerslev1986garch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[2] </div><div class="csl-right-inline">Tim
+Bollerslev. Generalized autoregressive conditional heteroskedasticity.
+<em>Journal of Econometrics</em>, 31(3):307–327, 1986. doi: <a
+href="https://doi.org/10.1016/0304-4076(86)90063-1">10.1016/0304-4076(86)90063-1</a>.</div>
+</div>
+<div id="ref-chu2017garch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[3] </div><div
+class="csl-right-inline">Jeffrey Chu, Stephen Chan, Saralees Nadarajah,
+and Joerg Osterrieder. <span>GARCH</span> modelling of cryptocurrencies.
+<em>Journal of Risk and Financial Management</em>, 10(4):17, 2017. doi:
+<a
+href="https://doi.org/10.3390/jrfm10040017">10.3390/jrfm10040017</a>.</div>
+</div>
+<div id="ref-engle1982arch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[4] </div><div
+class="csl-right-inline">Robert F. Engle. Autoregressive conditional
+heteroscedasticity with estimates of the variance of united kingdom
+inflation. <em>Econometrica</em>, 50(4):987–1007, 1982. doi: <a
+href="https://doi.org/10.2307/1912773">10.2307/1912773</a>.</div>
+</div>
+<div id="ref-hansenlunde2005garch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[5] </div><div
+class="csl-right-inline">Peter R. Hansen and Asger Lunde. A forecast
+comparison of volatility models: Does anything beat a
+<span>GARCH(1,1)</span>? <em>Journal of Applied Econometrics</em>,
+20(7):873–889, 2005. doi: <a
+href="https://doi.org/10.1002/jae.800">10.1002/jae.800</a>.</div>
+</div>
+<div id="ref-riskmetrics1996" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[6] </div><div
+class="csl-right-inline">J.P. Morgan/Reuters. <span>RiskMetrics</span>
+technical document. J.P. Morgan/Reuters, 1996. Defines the exponentially
+weighted moving average (EWMA) variance estimator with decay <span
+class="math inline">\lambda = 0.94</span> for daily data.</div>
+</div>
+<div id="ref-katsiampa2017volatility" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[7] </div><div
+class="csl-right-inline">Paraskevi Katsiampa. Volatility estimation for
+bitcoin: A comparison of <span>GARCH</span> models. <em>Economics
+Letters</em>, 158:3–6, 2017. doi: <a
+href="https://doi.org/10.1016/j.econlet.2017.06.023">10.1016/j.econlet.2017.06.023</a>.</div>
+</div>
+<div id="ref-mandelbrot1963variation" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[8] </div><div
+class="csl-right-inline">Benoit Mandelbrot. The variation of certain
+speculative prices. <em>The Journal of Business</em>, 36(4):394–419,
+1963. doi: <a
+href="https://doi.org/10.1086/294632">10.1086/294632</a>.</div>
+</div>
+<div id="ref-nelson1991egarch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[9] </div><div
+class="csl-right-inline">Daniel B. Nelson. Conditional
+heteroskedasticity in asset returns: A new approach.
+<em>Econometrica</em>, 59(2):347–370, 1991. doi: <a
+href="https://doi.org/10.2307/2938260">10.2307/2938260</a>.</div>
+</div>
+<div id="ref-patton2011volatility" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[10] </div><div
+class="csl-right-inline">Andrew J. Patton. Volatility forecast
+comparison using imperfect volatility proxies. <em>Journal of
+Econometrics</em>, 160(1):246–256, 2011. doi: <a
+href="https://doi.org/10.1016/j.jeconom.2010.03.034">10.1016/j.jeconom.2010.03.034</a>.
+Characterizes the loss functions (including MSE and QLIKE) whose
+forecast ranking is robust to replacing the latent variance by a
+conditionally unbiased proxy such as the squared return.</div>
+</div>
+<div id="ref-sheppard2023arch" class="csl-entry" role="listitem">
+<div class="csl-left-margin">[11] </div><div
+class="csl-right-inline">Kevin Sheppard. <span
+class="nocase">arch</span>: Autoregressive conditional
+heteroskedasticity (<span>ARCH</span>) and other tools for financial
+econometrics in <span>Python</span>. <a
+href="https://github.com/bashtage/arch"
+class="uri">https://github.com/bashtage/arch</a>, 2023. Python package;
+version 8.0.0 used here. DOI via Zenodo: <a
+href="https://doi.org/10.5281/zenodo.593254"
+class="uri">https://doi.org/10.5281/zenodo.593254</a>.</div>
+</div>
+</div>

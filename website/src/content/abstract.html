@@ -1,0 +1,51 @@
+<p>GARCH(1,1) is the workhorse of applied volatility modeling, but “it
+forecasts well” is usually asserted on real data where the true
+conditional variance is never observed. We instead run four seeded,
+fully reproducible experiments on a synthetic GARCH(1,1) data-generating
+process (DGP) whose conditional-variance path is known by construction,
+and calibrate exactly when the model earns its keep and whether the
+evaluation can be trusted without observing volatility. First,
+maximum-likelihood estimation is consistent: on a crypto-like DGP (<span
+class="math inline">\alpha=0.09</span>, <span
+class="math inline">\beta=0.90</span>, persistence <span
+class="math inline">0.99</span>) the persistence estimate converges to
+the truth (<span class="math inline">0.977 \to 0.989</span> as the
+sample grows from <span class="math inline">500</span> to <span
+class="math inline">5000</span>) and every parameter’s root-mean-square
+error falls roughly like <span class="math inline">1/\sqrt{T}</span>
+(persistence RMSE <span class="math inline">0.028 \to 0.004</span>).
+Second, in a one-step-ahead forecast contest scored against the
+<em>true</em> conditional variance by the proxy-robust QLIKE loss, the
+correctly specified GARCH wins at every DGP, beating the best naive
+competitor (RiskMetrics EWMA or a rolling window) by <span
+class="math inline">83</span>–<span class="math inline">93\%</span>; the
+advantage is largest at moderate persistence and shrinks toward the
+near-random regime (best-naive QLIKE <span class="math inline">0.0222
+\to 0.0079</span> as persistence falls from <span
+class="math inline">0.90</span> to <span
+class="math inline">0.05</span>), and near-IGARCH the RiskMetrics EWMA
+is the closest competitor because it <em>is</em> a persistence-one
+GARCH. Third, across a persistence grid the persistence itself is pinned
+down tightly even near the unit root (RMSE <span
+class="math inline">0.032 \to 0.005</span> as persistence rises to <span
+class="math inline">0.995</span>), but everything derived from it
+explodes: the implied volatility half-life runs from <span
+class="math inline">6.6</span> to <span class="math inline">138.3</span>
+observations while its estimate becomes wildly dispersed (interquartile
+range <span class="math inline">2.6 \to 121.4</span>) and the long-run
+variance grows increasingly downward biased — the near-IGARCH fragility,
+quantified. Fourth, re-scoring the same forecasters against the noisy
+squared-return proxy instead of the true variance leaves the ranking
+intact for the Patton-robust losses: the proxy inflates every QLIKE by a
+nearly forecaster-independent constant (at the crypto DGP, GARCH’s QLIKE
+moves <span class="math inline">0.0018 \to 1.269</span> and EWMA’s <span
+class="math inline">0.0119 \to 1.280</span>, preserving the gap) and
+GARCH is selected under the proxy at all six DGPs, whereas the
+non-robust MAE agrees on only <span class="math inline">82\%</span> of
+noisy draws versus <span class="math inline">96\%</span> for QLIKE.
+GARCH’s win here is guaranteed by construction — the DGP is GARCH — so
+the contribution is not that GARCH beats naive forecasters on real
+crypto, but the calibration of <em>when</em> and <em>by how much</em> it
+should, and the demonstration that the evaluation is trustworthy even
+when true volatility is unobservable. This study accompanies a <a
+href="https://marketmaker.cc">marketmaker.cc</a> blog post.</p>
