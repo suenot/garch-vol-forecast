@@ -1,0 +1,134 @@
+% refs.bib
+% References for "Does GARCH(1,1) Actually Forecast Volatility? A Controlled
+% Study." The GARCH-model and crypto-application entries are carried over from
+% the accompanying marketmaker.cc blog draft's References section; the
+% forecast-evaluation entries (Patton 2011, Hansen & Lunde 2005, Andersen &
+% Bollerslev 1998, RiskMetrics 1996) are the canonical primary sources for the
+% volatility-forecast-comparison and imperfect-proxy machinery used here. DOIs
+% are the publisher-registered identifiers.
+
+@article{engle1982arch,
+  author  = {Engle, Robert F.},
+  title   = {Autoregressive Conditional Heteroscedasticity with Estimates of
+             the Variance of United Kingdom Inflation},
+  journal = {Econometrica},
+  year    = {1982},
+  volume  = {50},
+  number  = {4},
+  pages   = {987--1007},
+  doi     = {10.2307/1912773}
+}
+
+@article{bollerslev1986garch,
+  author  = {Bollerslev, Tim},
+  title   = {Generalized Autoregressive Conditional Heteroskedasticity},
+  journal = {Journal of Econometrics},
+  year    = {1986},
+  volume  = {31},
+  number  = {3},
+  pages   = {307--327},
+  doi     = {10.1016/0304-4076(86)90063-1}
+}
+
+@article{mandelbrot1963variation,
+  author  = {Mandelbrot, Benoit},
+  title   = {The Variation of Certain Speculative Prices},
+  journal = {The Journal of Business},
+  year    = {1963},
+  volume  = {36},
+  number  = {4},
+  pages   = {394--419},
+  doi     = {10.1086/294632}
+}
+
+@article{nelson1991egarch,
+  author  = {Nelson, Daniel B.},
+  title   = {Conditional Heteroskedasticity in Asset Returns: A New Approach},
+  journal = {Econometrica},
+  year    = {1991},
+  volume  = {59},
+  number  = {2},
+  pages   = {347--370},
+  doi     = {10.2307/2938260}
+}
+
+@article{katsiampa2017volatility,
+  author  = {Katsiampa, Paraskevi},
+  title   = {Volatility Estimation for Bitcoin: A Comparison of {GARCH} Models},
+  journal = {Economics Letters},
+  year    = {2017},
+  volume  = {158},
+  pages   = {3--6},
+  doi     = {10.1016/j.econlet.2017.06.023}
+}
+
+@article{chu2017garch,
+  author  = {Chu, Jeffrey and Chan, Stephen and Nadarajah, Saralees and
+             Osterrieder, Joerg},
+  title   = {{GARCH} Modelling of Cryptocurrencies},
+  journal = {Journal of Risk and Financial Management},
+  year    = {2017},
+  volume  = {10},
+  number  = {4},
+  pages   = {17},
+  doi     = {10.3390/jrfm10040017}
+}
+
+@article{patton2011volatility,
+  author  = {Patton, Andrew J.},
+  title   = {Volatility Forecast Comparison Using Imperfect Volatility Proxies},
+  journal = {Journal of Econometrics},
+  year    = {2011},
+  volume  = {160},
+  number  = {1},
+  pages   = {246--256},
+  doi     = {10.1016/j.jeconom.2010.03.034},
+  note    = {Characterizes the loss functions (including MSE and QLIKE) whose
+             forecast ranking is robust to replacing the latent variance by a
+             conditionally unbiased proxy such as the squared return.}
+}
+
+@article{hansenlunde2005garch,
+  author  = {Hansen, Peter R. and Lunde, Asger},
+  title   = {A Forecast Comparison of Volatility Models: Does Anything Beat a
+             {GARCH(1,1)}?},
+  journal = {Journal of Applied Econometrics},
+  year    = {2005},
+  volume  = {20},
+  number  = {7},
+  pages   = {873--889},
+  doi     = {10.1002/jae.800}
+}
+
+@article{andersenbollerslev1998answering,
+  author  = {Andersen, Torben G. and Bollerslev, Tim},
+  title   = {Answering the Skeptics: Yes, Standard Volatility Models Do Provide
+             Accurate Forecasts},
+  journal = {International Economic Review},
+  year    = {1998},
+  volume  = {39},
+  number  = {4},
+  pages   = {885--905},
+  doi     = {10.2307/2527343}
+}
+
+@techreport{riskmetrics1996,
+  author      = {{J.P. Morgan/Reuters}},
+  title       = {{RiskMetrics} Technical Document},
+  institution = {J.P. Morgan/Reuters},
+  year        = {1996},
+  address     = {New York},
+  number      = {Fourth Edition},
+  note        = {Defines the exponentially weighted moving average (EWMA)
+                 variance estimator with decay $\lambda = 0.94$ for daily data.}
+}
+
+@misc{sheppard2023arch,
+  author  = {Sheppard, Kevin},
+  title   = {{arch}: Autoregressive Conditional Heteroskedasticity ({ARCH}) and
+             Other Tools for Financial Econometrics in {Python}},
+  year    = {2023},
+  howpublished = {\url{https://github.com/bashtage/arch}},
+  note    = {Python package; version 8.0.0 used here. DOI via Zenodo:
+             \url{https://doi.org/10.5281/zenodo.593254}.}
+}
