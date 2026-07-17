@@ -1,5 +1,8 @@
 # Does GARCH(1,1) Actually Forecast Volatility? A Controlled Study
 
+**Read online (interactive paper):** <https://garch-forecast.marketmaker.cc> · **Blog post:** <https://marketmaker.cc/en/blog/post/garch-volatility-forecasting-crypto>
+
+
 A reproducible, controlled study of **GARCH(1,1) volatility forecasting on a
 synthetic DGP with known ground truth**. On real markets the conditional
 variance is never observed, so "GARCH forecasts well" is hard to verify. We
@@ -102,3 +105,4 @@ paper/main.tex             # the paper   |   paper/FORMULAS.md  formulas + prove
 ## License
 
 Code: MIT. Paper text and figures: CC BY 4.0.
+
